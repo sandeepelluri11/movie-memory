@@ -4,6 +4,8 @@ Sign in with Google, tell us your favorite movie, and get a fun fact about it fr
 
 **Variant chosen: A — Backend-focused (caching & correctness).**
 
+**Why A:** the riskiest part of this app is the OpenAI call. It's slow, it costs money per request, and it can fail. Variant A goes straight at that risk: caching avoids paying for repeat facts, burst protection stops several tabs from making duplicate paid calls, and the fallback keeps the dashboard useful when OpenAI is down. It's also where the hardest correctness problem is (concurrent requests racing to generate), and it's best solved with data modeling and a Postgres guarantee, which is easy to prove with tests. Variant B's client-side caching and optimistic UI are valuable, but they only make the UI feel better; they wouldn't stop duplicate paid calls or protect the data.
+
 Stack: Next.js 16 (App Router) · React 19 · TypeScript · Tailwind v4 · Postgres 17 · Prisma 7 · Auth.js v5 (Google) · OpenAI · Vitest.
 
 ---
