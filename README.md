@@ -196,7 +196,21 @@ The dashboard and onboarding pages likewise only ever load `where: { id: session
 
 ## AI usage
 
-- Used an AI coding assistant (GitHub Copilot in VS Code) to scaffold the project, look up Next.js 16 / Prisma 7 / Auth.js v5 API changes (`proxy.ts`, async request APIs, Cache Components + Suspense, Prisma driver adapters), and draft boilerplate (Auth.js tables, Tailwind markup).
-- Designed the fact-generation algorithm (lease, waiter, fallback) and the schema myself with AI as a sounding board; reviewed the concurrency reasoning manually and verified it with a real-Postgres concurrency test.
-- AI drafted the test cases from my list of scenarios; I reviewed each assertion against the requirements (e.g. "exactly 60s" boundary, cross-user scoping).
-- Drafted this README with AI assistance and edited it for accuracy.
+I built this project together with an AI coding agent (GitHub Copilot agent mode in VS Code). To be transparent about the split:
+
+- **What I did:**
+  - Read the brief and chose Variant A.
+  - Set up the Google OAuth client and the OpenAI key.
+  - Tested the real sign-in → onboarding → dashboard flow in the browser.
+  - Directed the work: asked for a requirements review, then for production hardening and broader test coverage.
+  - Reviewed the output and made the final calls on what to keep.
+- **What the AI did:**
+  - Wrote most of the code, tests and this README.
+  - Proposed the main design decisions, which I reviewed and accepted: the DB lease for burst protection, the repository interface that makes the fact service testable, and the `movie` snapshot on facts.
+- **Keeping up with new framework versions:** the AI read the docs bundled with Next.js 16, Prisma 7 and Auth.js v5 instead of relying on memory. That's how it caught `middleware` → `proxy`, async request APIs, Cache Components needing `<Suspense>`, `error.tsx` using `retry`, and Prisma 7's driver adapters.
+- **Verification over trust:** every change was checked by running typecheck, lint, all three test suites and a production build. A full CI simulation from a clean clone against an empty database caught a typecheck failure that never showed up locally, and it was fixed. Manual testing found an OpenAI quota error and a truncated API key, and confirmed the app degraded gracefully in both cases.
+- **Bugs the AI caught in its own work:**
+  - A missing `AUTH_TRUST_HOST`/`AUTH_URL` setting that would have broken login in production.
+  - A test mock that caused an infinite re-render loop.
+  - A Next.js prerender warning from Auth.js.
+- **How I make sure I understand it:** I went through the architecture, schema and concurrency reasoning in this README until I could explain each decision and tradeoff myself, and the tests show the behavior the README describes.
