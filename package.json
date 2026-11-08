@@ -2,6 +2,9 @@
   "name": "movie-memory",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.9"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -9,7 +12,8 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:db": "RUN_DB_TESTS=1 vitest run src/lib/facts/prisma-repository.db.test.ts",
+    "test:db": "RUN_DB_TESTS=1 vitest run db.test",
+    "test:e2e": "next build && vitest run --config vitest.e2e.config.mts",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy"
@@ -28,12 +32,15 @@
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^24.19.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "dotenv": "^18.0.9",
     "eslint": "^9",
     "eslint-config-next": "16.4.5",
+    "happy-dom": "^21.0.4",
     "prisma": "^7.10.1",
     "tailwindcss": "^4",
     "typescript": "^5",
@@ -41,6 +48,7 @@
   },
   "allowScripts": {
     "@prisma/engines@7.10.1": true,
-    "prisma@7.10.1": true
+    "prisma@7.10.1": true,
+    "fsevents": false
   }
 }

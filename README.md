@@ -29,6 +29,7 @@ npm run dev                 # http://localhost:3000
 | `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | yes | Google Cloud Console → OAuth client (Web). Redirect URI: `http://localhost:3000/api/auth/callback/google`. |
 | `OPENAI_API_KEY` | yes | Server-only. |
 | `OPENAI_MODEL` | no | Defaults to `gpt-4o-mini`. |
+| `AUTH_URL` or `AUTH_TRUST_HOST` | production only | Needed for `next start` outside Vercel. Prefer `AUTH_URL` (the public URL); `AUTH_TRUST_HOST=true` trusts the `Host` header and is only safe behind a proxy that sets it. |
 
 None of these use the `NEXT_PUBLIC_` prefix, so none are bundled for the browser.
 
@@ -39,10 +40,21 @@ None of these use the `NEXT_PUBLIC_` prefix, so none are bundled for the browser
 
 ### Tests
 
+Three layers, all run in CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) on every push and PR, together with lint and typecheck:
+
 ```bash
-npm test          # unit tests: cache window, burst protection, failure fallback, authorization, validation
-npm run test:db   # integration test against the real Postgres: lease atomicity + user scoping
+npm test          # unit: no DB or network needed
+npm run test:db   # integration: needs Postgres (docker compose up -d)
+npm run test:e2e  # end-to-end: builds the app, needs Postgres
 ```
+
+| Layer | What it proves |
+| --- | --- |
+| **Unit** (Vitest) | The fact service's cache window (59.999s vs 60s), burst protection, stale fallback and per-user scoping, run against an in-memory repository and a fake clock. Also: the `/api/fact` status codes (401/409/503/500), onboarding validation and its "never overwrite" rule, and the `FunFact` component's loading/error/stale/401 states. |
+| **Integration** (Vitest + Postgres) | The real Prisma repository: exactly 1 of 20 concurrent callers gets the lease, only the owner can release it, queries are scoped by user, and 10 concurrent service calls generate one fact. |
+| **End-to-end** (Vitest + `next start`) | The production build over HTTP with real Postgres and real Auth.js database sessions; only OpenAI is replaced by a local stub that can succeed, fail or slow down and counts calls. Covers redirects, forged cookies, onboarding routing, dashboard content (including a missing name/photo), cache → regenerate, a 6-request burst making 1 OpenAI call, fallback, cross-user isolation, logout and security headers. |
+
+The e2e suite seeds sessions directly in the `Session` table rather than driving Google's consent screen, which can't run headlessly in CI. It creates throwaway users (`*@e2e.example.com`) and deletes them afterwards.
 
 ---
 
@@ -65,7 +77,10 @@ src/
     facts/service.ts            Cache window, burst protection, failure fallback (pure, no I/O imports)
     facts/prisma-repository.ts  Postgres implementation of the repository interface
     facts/openai-generator.ts   OpenAI call with timeout and prompt hardening
-prisma/schema.prisma
+  app/error.tsx                 Error boundary for unexpected render errors
+prisma/                         Schema + committed migrations
+e2e/                            End-to-end suite, including an OpenAI stub server
+.github/workflows/ci.yml        Lint, typecheck, unit, integration and e2e on every push/PR
 ```
 
 ### Auth flow
@@ -78,6 +93,8 @@ prisma/schema.prisma
 
 Pages read the session inside `<Suspense>`, as required by Next 16 Cache Components for request-time data.
 
+If Google sign-in fails or the user cancels consent, Auth.js redirects to `/?error=…` and the landing page shows a friendly message.
+
 ### Data model
 
 - **`User`** (Auth.js shape) plus:
@@ -89,6 +106,7 @@ Pages read the session inside `<Suspense>`, as required by Next 16 Cache Compone
   - Index `(userId, movie, createdAt DESC)` makes "latest fact for this user + movie" a single index lookup.
   - `createdAt` is written by the app clock (not `DEFAULT now()`), so the 60s comparison always uses one clock.
   - `onDelete: Cascade` from `User`.
+- **Length limits in the database too:** `favoriteMovie`/`movie` are `VARCHAR(100)` (matching validation) and `content` is `VARCHAR(1000)`. The DB enforces the limits even if a future code path skips validation.
 
 ### Fact generation (Variant A)
 
@@ -143,6 +161,12 @@ The dashboard and onboarding pages likewise only ever load `where: { id: session
 
 `favoriteMovieSchema` (zod) runs on the server: string required, trim, collapse internal whitespace, 1–100 chars, no control characters. The input's `maxLength`/`required` are UX only.
 
+### Other hardening
+
+- Security headers on every response: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy`.
+- `app/error.tsx` catches unexpected render errors and shows a retry screen instead of a stack trace.
+- OpenAI failures are logged as a single line (no response headers in logs).
+
 ---
 
 ## Key tradeoffs
@@ -163,7 +187,8 @@ The dashboard and onboarding pages likewise only ever load `where: { id: session
 - Per-user rate limiting on `/api/fact` and a stricter cap on regenerations per hour (cost control).
 - Moderation pass on model output and an `OPENAI_MODEL` allowlist.
 - An "edit favorite movie" flow; the `movie` snapshot on facts already makes cache invalidation correct for it.
-- End-to-end tests (Playwright) for the OAuth redirect flow with a mocked provider.
+- Browser-level tests (Playwright) for the onboarding form and the client-side redirect paths. The current e2e suite works at the HTTP level.
+- A Content-Security-Policy with nonces (needs care with Next's inline scripts).
 - Structured logging/metrics for cache hit rate, lease contention and OpenAI latency/errors.
 - Fact retention policy (e.g. keep the last N per user).
 

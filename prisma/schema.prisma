@@ -14,8 +14,8 @@ model User {
   email         String?   @unique
   emailVerified DateTime?
   image         String?
-  // null = onboarding not completed yet.
-  favoriteMovie String?
+  // null = onboarding not completed yet. Length mirrors MOVIE_MAX_LENGTH in src/lib/movie.ts.
+  favoriteMovie String?   @db.VarChar(100)
 
   // Lease for "generation in progress"; see src/lib/facts/service.ts.
   factGenerationStartedAt DateTime?
@@ -72,8 +72,8 @@ model MovieFact {
   id      String @id @default(cuid())
   userId  String
   // Snapshot of the movie the fact is about, so a later movie change never serves a stale fact.
-  movie   String
-  content String
+  movie   String @db.VarChar(100)
+  content String @db.VarChar(1000)
   // Set by the app clock (not DB default) so cache-age math uses a single clock.
   createdAt DateTime
 

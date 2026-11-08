@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: movie
+          POSTGRES_PASSWORD: movie
+          POSTGRES_DB: movie_memory
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U movie -d movie_memory"
+          --health-interval 2s
+          --health-retries 15
+
+    env:
+      DATABASE_URL: postgresql://movie:movie@localhost:5432/movie_memory?schema=public
+      # Dummy values: CI never talks to Google, and OpenAI is stubbed in the e2e suite.
+      AUTH_SECRET: ci-only-not-a-real-secret-0123456789abcdef
+      AUTH_GOOGLE_ID: ci.apps.googleusercontent.com
+      AUTH_GOOGLE_SECRET: ci
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npx prisma migrate deploy
+      - run: npm run lint
+      - run: npm run typecheck
+      - name: Unit tests
+        run: npm test
+      - name: Integration tests (Postgres)
+        run: npm run test:db
+      - name: End-to-end tests (production build)
+        run: npm run test:e2e

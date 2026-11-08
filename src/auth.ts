@@ -10,7 +10,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
   session: { strategy: "database" },
   providers: [Google],
-  pages: { signIn: "/" },
+  // Auth errors (e.g. cancelled consent) land on "/?error=..." instead of Auth.js's default page.
+  pages: { signIn: "/", error: "/" },
   callbacks: {
     session({ session, user }) {
       session.user.id = user.id;
