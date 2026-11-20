@@ -1,4 +1,5 @@
 import http from "node:http";
+import path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
 
 export const APP_PORT = 3100;
@@ -67,7 +68,9 @@ async function waitForApp(url: string, timeoutMs = 60_000) {
 export default async function setup() {
   const stub = await startOpenAIStub();
 
-  const app: ChildProcess = spawn("node_modules/.bin/next", ["start", "-p", String(APP_PORT)], {
+  // Run Next's JS entry with node directly: node_modules/.bin/next is a .cmd shim on Windows.
+  const nextBin = path.join(process.cwd(), "node_modules", "next", "dist", "bin", "next");
+  const app: ChildProcess = spawn(process.execPath, [nextBin, "start", "-p", String(APP_PORT)], {
     env: {
       ...process.env,
       NODE_ENV: "production",
