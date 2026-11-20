@@ -12,7 +12,7 @@
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
-    "test:db": "RUN_DB_TESTS=1 vitest run db.test",
+    "test:db": "vitest run --config vitest.db.config.mts",
     "test:e2e": "next build && vitest run --config vitest.e2e.config.mts",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate dev",
